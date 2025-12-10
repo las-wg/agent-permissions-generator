@@ -1,14 +1,17 @@
 .page {
+  --primary: #0ea5e9;
+  --primary-soft: rgba(14, 165, 233, 0.12);
+  --primary-strong: rgba(14, 165, 233, 0.2);
+  --ink: #101828;
   min-height: 100vh;
   width: 100%;
   padding: 48px 16px 80px;
-  background: radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.14), transparent 45%),
-    radial-gradient(circle at 80% 0%, rgba(124, 58, 237, 0.16), transparent 42%),
-    linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.02));
+  background: #f9fafc;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 32px;
+  color: var(--ink);
 }
 
 .header {
@@ -47,12 +50,11 @@
 
 .tabRow {
   display: inline-flex;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #ffffff;
+  border: 1px solid rgba(16, 24, 40, 0.06);
   border-radius: 999px;
   padding: 6px;
   gap: 6px;
-  box-shadow: 0 18px 36px -16px rgba(59, 130, 246, 0.35);
 }
 
 .tabButton {
@@ -67,9 +69,8 @@
 }
 
 .tabButtonActive {
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  background: #0ea5e9;
   color: #fff;
-  box-shadow: 0 10px 18px rgba(79, 70, 229, 0.35);
 }
 
 .tabButton:hover {
@@ -85,15 +86,14 @@
 }
 
 .panel {
-  backdrop-filter: blur(12px);
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(6px);
+  background: #ffffff;
+  border: 1px solid rgba(16, 24, 40, 0.08);
   border-radius: 20px;
   padding: 28px;
   display: flex;
   flex-direction: column;
   gap: 20px;
-  box-shadow: 0 25px 50px -12px rgba(30, 64, 175, 0.18);
 }
 
 .panelHeading {
@@ -122,7 +122,7 @@
   padding: 12px 14px;
   font-size: 1rem;
   color: inherit;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease;
 }
 
 .textarea {
@@ -133,8 +133,7 @@
 .input:focus,
 .textarea:focus {
   outline: none;
-  border-color: rgba(59, 130, 246, 0.8);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
+  border-color: rgba(79, 85, 193, 0.8);
 }
 
 .presets {
@@ -157,8 +156,8 @@
 
 .preset {
   border-radius: 999px;
-  border: 1px solid rgba(59, 130, 246, 0.4);
-  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(79, 85, 193, 0.35);
+  background: rgba(79, 85, 193, 0.08);
   color: inherit;
   padding: 6px 14px;
   font-size: 0.9rem;
@@ -167,8 +166,8 @@
 }
 
 .preset:hover:not(:disabled) {
-  background: rgba(59, 130, 246, 0.22);
-  border-color: rgba(59, 130, 246, 0.58);
+  background: rgba(79, 85, 193, 0.18);
+  border-color: rgba(79, 85, 193, 0.48);
 }
 
 .preset:disabled {
@@ -204,13 +203,13 @@
   margin-top: 12px;
   border: none;
   border-radius: 12px;
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  background: #0ea5e9;
   color: #fff;
   font-weight: 600;
   font-size: 1rem;
   padding: 14px 18px;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s ease;
 }
 
 .submit:disabled {
@@ -220,7 +219,6 @@
 
 .submit:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 12px 24px rgba(79, 70, 229, 0.35);
 }
 
 .error {
@@ -338,7 +336,7 @@
 .pageMeta span {
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(59, 130, 246, 0.12);
+  background: var(--primary-soft);
 }
 
 .pageDetails {
@@ -391,13 +389,13 @@
 }
 
 .tag {
-  background: rgba(37, 99, 235, 0.12);
-  color: rgba(30, 64, 175, 0.9);
+  background: var(--primary-soft);
+  color: #0b5c75;
 }
 
 .tagNote {
-  background: rgba(124, 58, 237, 0.12);
-  color: rgba(88, 28, 135, 0.9);
+  background: rgba(14, 165, 233, 0.18);
+  color: #0b5c75;
 }
 
 .logList {
@@ -426,8 +424,8 @@
 
 .statusBadge {
   border-radius: 6px;
-  background: rgba(34, 197, 94, 0.14);
-  color: rgba(22, 101, 52, 0.9);
+  background: rgba(79, 85, 193, 0.14);
+  color: #2e2f80;
   font-size: 0.8rem;
   padding: 2px 6px;
   font-weight: 600;
@@ -441,7 +439,7 @@
 .copyButton {
   border: 1px solid rgba(15, 23, 42, 0.16);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.95);
   padding: 6px 12px;
   cursor: pointer;
   font-size: 0.85rem;
@@ -449,7 +447,7 @@
 }
 
 .copyButton:hover {
-  background: rgba(59, 130, 246, 0.18);
+  background: var(--primary-soft);
   transform: translateY(-1px);
 }
 
@@ -465,7 +463,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  background: rgba(59, 130, 246, 0.04);
+  background: rgba(79, 85, 193, 0.06);
 }
 
 .quickToggle input {
@@ -514,9 +512,27 @@
 }
 
 .pillActive {
-  background: rgba(59, 130, 246, 0.16);
-  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(79, 85, 193, 0.16);
+  border-color: rgba(79, 85, 193, 0.5);
   color: rgba(17, 24, 39, 0.9);
+}
+
+.themeToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(16, 24, 40, 0.08);
+  font-weight: 600;
+}
+
+.topBar {
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .timelineList {
@@ -583,9 +599,8 @@
 
 @media (prefers-color-scheme: dark) {
   .page {
-    background: radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.12), transparent 36%),
-      radial-gradient(circle at 80% 10%, rgba(168, 85, 247, 0.2), transparent 32%),
-      linear-gradient(180deg, rgba(56, 189, 248, 0.12), rgba(56, 189, 248, 0.04));
+    background: #0f172a;
+    color: var(--ink);
   }
 
   .subtitle {
@@ -599,99 +614,98 @@
   .panel,
   .card,
   .timeline {
-    background: rgba(15, 23, 42, 0.82);
-    border: 1px solid rgba(148, 163, 184, 0.18);
-    box-shadow: 0 25px 60px -18px rgba(14, 165, 233, 0.35);
+    background: #ffffff;
+    border: 1px solid rgba(16, 24, 40, 0.08);
   }
 
   .eyebrow {
-    color: #38bdf8;
+    color: var(--primary);
   }
 
   .input,
   .textarea {
-    background: rgba(15, 23, 42, 0.72);
-    border-color: rgba(148, 163, 184, 0.18);
-    color: rgba(226, 232, 240, 0.92);
+    background: rgba(255, 255, 255, 0.9);
+    border-color: rgba(15, 23, 42, 0.1);
+    color: inherit;
   }
 
   .presetLabel {
-    color: rgba(203, 213, 225, 0.76);
+    color: rgba(17, 24, 39, 0.65);
   }
 
   .preset {
-    background: rgba(59, 130, 246, 0.18);
-    border-color: rgba(59, 130, 246, 0.4);
+    background: rgba(79, 85, 193, 0.08);
+    border-color: rgba(79, 85, 193, 0.35);
   }
 
   .alert {
-    border-color: rgba(250, 204, 21, 0.45);
-    background: rgba(234, 179, 8, 0.22);
+    border-color: rgba(234, 179, 8, 0.4);
+    background: rgba(253, 224, 71, 0.18);
   }
 
   .code,
   .pageCode {
-    background: rgba(30, 41, 59, 0.76);
+    background: rgba(15, 23, 42, 0.08);
   }
 
   .muted {
-    color: rgba(203, 213, 225, 0.7);
+    color: rgba(17, 24, 39, 0.56);
   }
 
   .pageItem {
-    background: rgba(30, 41, 59, 0.74);
-    border-color: rgba(148, 163, 184, 0.18);
+    background: rgba(255, 255, 255, 0.78);
+    border-color: rgba(15, 23, 42, 0.12);
   }
 
   .pageTitle {
-    color: rgba(148, 163, 184, 0.78);
+    color: rgba(17, 24, 39, 0.6);
   }
 
   .pageMeta {
-    color: rgba(191, 219, 254, 0.82);
+    color: rgba(17, 24, 39, 0.68);
   }
 
   .tag {
-    background: rgba(59, 130, 246, 0.22);
-    color: rgba(191, 219, 254, 0.95);
+    background: var(--primary-soft);
+    color: #2e2f80;
   }
 
   .tagNote {
-    background: rgba(168, 85, 247, 0.28);
-    color: rgba(233, 213, 255, 0.9);
+    background: rgba(140, 145, 232, 0.18);
+    color: #4542a0;
   }
 
   .statusBadge {
-    background: rgba(34, 197, 94, 0.25);
-    color: rgba(220, 252, 231, 0.9);
+    background: rgba(79, 85, 193, 0.14);
+    color: #2e2f80;
   }
 
   .copyButton {
-    background: rgba(30, 41, 59, 0.7);
-    border-color: rgba(148, 163, 184, 0.2);
-    color: rgba(226, 232, 240, 0.9);
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(15, 23, 42, 0.16);
+    color: inherit;
   }
 
   .quickToggleDescription,
   .timelineDetail,
   .timelineTime {
-    color: rgba(203, 213, 225, 0.75);
+    color: rgba(17, 24, 39, 0.7);
   }
 
   .quickToggle {
-    background: rgba(59, 130, 246, 0.12);
-    border-color: rgba(59, 130, 246, 0.35);
+    background: rgba(79, 85, 193, 0.06);
+    border-color: rgba(15, 23, 42, 0.1);
   }
 
   .pill {
-    background: rgba(30, 41, 59, 0.8);
-    border-color: rgba(148, 163, 184, 0.24);
-    color: rgba(226, 232, 240, 0.9);
+    background: rgba(255, 255, 255, 0.86);
+    border-color: rgba(15, 23, 42, 0.12);
+    color: rgba(17, 24, 39, 0.9);
   }
 
   .pillActive {
-    background: rgba(59, 130, 246, 0.3);
-    border-color: rgba(59, 130, 246, 0.6);
+    background: rgba(79, 85, 193, 0.16);
+    border-color: rgba(79, 85, 193, 0.5);
   }
 }
 
@@ -720,4 +734,137 @@
     justify-content: center;
     flex-wrap: wrap;
   }
+}
+.lightMode {
+  background: #f9fafc;
+  color: var(--ink);
+}
+
+.darkMode {
+  background: #0f172a;
+  color: #e5e7eb;
+}
+
+.darkMode .panel,
+.darkMode .card,
+.darkMode .timeline {
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.darkMode .eyebrow {
+  color: #38bdf8;
+}
+
+.darkMode .subtitle {
+  color: rgba(248, 250, 252, 0.76);
+}
+
+.darkMode .subtitle code {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.darkMode .input,
+.darkMode .textarea {
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(148, 163, 184, 0.18);
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.darkMode .presetLabel {
+  color: rgba(203, 213, 225, 0.76);
+}
+
+.darkMode .preset {
+  background: rgba(79, 85, 193, 0.18);
+  border-color: rgba(79, 85, 193, 0.4);
+}
+
+.darkMode .alert {
+  border-color: rgba(250, 204, 21, 0.45);
+  background: rgba(234, 179, 8, 0.22);
+}
+
+.darkMode .code,
+.darkMode .pageCode {
+  background: rgba(30, 41, 59, 0.76);
+}
+
+.darkMode .muted {
+  color: rgba(203, 213, 225, 0.7);
+}
+
+.darkMode .pageItem {
+  background: rgba(30, 41, 59, 0.74);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.darkMode .pageTitle {
+  color: rgba(148, 163, 184, 0.78);
+}
+
+.darkMode .pageMeta {
+  color: rgba(191, 219, 254, 0.82);
+}
+
+.darkMode .tag {
+  background: rgba(14, 165, 233, 0.22);
+  color: rgba(191, 239, 255, 0.95);
+}
+
+.darkMode .tagNote {
+  background: rgba(14, 165, 233, 0.24);
+  color: rgba(191, 239, 255, 0.92);
+}
+
+.darkMode .statusBadge {
+  background: rgba(34, 197, 94, 0.25);
+  color: rgba(220, 252, 231, 0.9);
+}
+
+.darkMode .copyButton {
+  background: rgba(30, 41, 59, 0.7);
+  border-color: rgba(148, 163, 184, 0.2);
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.darkMode .quickToggleDescription,
+.darkMode .timelineDetail,
+.darkMode .timelineTime {
+  color: rgba(203, 213, 225, 0.75);
+}
+
+.darkMode .quickToggle {
+  background: rgba(79, 85, 193, 0.12);
+  border-color: rgba(79, 85, 193, 0.35);
+}
+
+.darkMode .pill {
+  background: rgba(30, 41, 59, 0.8);
+  border-color: rgba(148, 163, 184, 0.24);
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.darkMode .pillActive {
+  background: rgba(79, 85, 193, 0.3);
+  border-color: rgba(79, 85, 193, 0.6);
+}
+
+.darkMode .tabRow,
+.darkMode .themeToggle {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.darkMode .tabButton {
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.darkMode .tabButtonActive {
+  background: #0ea5e9;
+  color: #fff;
+}
+
+.darkMode .themeToggle {
+  color: rgba(226, 232, 240, 0.9);
 }

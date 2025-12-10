@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import styles from "./page.module.css";
 
 const PRESET_SNIPPETS = [
@@ -112,7 +112,6 @@ type ParsedPolicy = {
 
 type TabKey = "quick" | "generator" | "parser";
 
-const DEFAULT_MODE: "static" | "browserless" = "static";
 const DEFAULT_QUICK_STATE: QuickBuilderState = {
   siteName: "",
   allowReadContent: true,
@@ -127,9 +126,10 @@ const DEFAULT_QUICK_STATE: QuickBuilderState = {
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabKey>("quick");
+  const [themePref, setThemePref] = useState<"light" | "dark">("light");
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
   const [url, setUrl] = useState("");
   const [instructions, setInstructions] = useState("");
-  const [mode, setMode] = useState<"static" | "browserless">(DEFAULT_MODE);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ApiResponse | null>(null);
@@ -163,6 +163,15 @@ export default function Home() {
 
   const quickPolicy = useMemo(() => buildQuickPolicy(quickState), [quickState]);
   const parsedPolicy = useMemo(() => parsePolicy(parserInput), [parserInput]);
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    setThemePref(media.matches ? "dark" : "light");
+    setResolvedTheme(media.matches ? "dark" : "light");
+  }, []);
+
+  useEffect(() => {
+    setResolvedTheme(themePref);
+  }, [themePref]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -180,7 +189,7 @@ export default function Home() {
         body: JSON.stringify({
           url,
           instructions,
-          mode,
+          mode: "static",
         }),
       });
 
@@ -269,13 +278,34 @@ export default function Home() {
   const activeTimeline = result?.processLog?.length ? result.processLog : processLog;
 
   return (
-    <div className={styles.page}>
+    <div
+      className={`${styles.page} ${
+        resolvedTheme === "dark" ? styles.darkMode : styles.lightMode
+      }`}
+    >
+      <div className={styles.topBar}>
+        <div className={styles.themeToggle}>
+          <span>Theme</span>
+          <button
+            type="button"
+            className={`${styles.pill} ${themePref === "light" ? styles.pillActive : ""}`}
+            onClick={() => setThemePref("light")}
+          >
+            Light
+          </button>
+          <button
+            type="button"
+            className={`${styles.pill} ${themePref === "dark" ? styles.pillActive : ""}`}
+            onClick={() => setThemePref("dark")}
+          >
+            Dark
+          </button>
+        </div>
+      </div>
       <header className={styles.header}>
-        <p className={styles.eyebrow}>Agent Permissions Playground</p>
-        <h1 className={styles.title}>Draft, test, and explain agent-permissions.json</h1>
+        <h1 className={styles.title}>agent-permissions.json Tools</h1>
         <p className={styles.subtitle}>
-          Capture a single-page snapshot (no crawling), generate a draft policy, build one from
-          presets, or paste JSON to see a human-friendly explainer.
+          Build a policy from presets, generate one for a specific page, or paste JSON to see a human-friendly explanation.
         </p>
       </header>
 
@@ -302,9 +332,6 @@ export default function Home() {
           <section className={styles.panel}>
             <div className={styles.panelHeading}>
               <h2>Quick agent-permissions builder</h2>
-              <p className={styles.muted}>
-                Pick a few opinionated defaults, then copy a ready-to-ship agent-permissions.json.
-              </p>
             </div>
 
             <label className={styles.label} htmlFor="site-name">
@@ -421,9 +448,6 @@ export default function Home() {
             <form className={styles.form} onSubmit={handleSubmit}>
               <div className={styles.panelHeading}>
                 <h2>Generator</h2>
-                <p className={styles.muted}>
-                  We only fetch the landing page you provide. No crawling across links.
-                </p>
               </div>
 
               <label className={styles.label} htmlFor="site-url">
@@ -446,7 +470,7 @@ export default function Home() {
               <textarea
                 id="instructions"
                 name="instructions"
-                placeholder="Share any special rules or context..."
+                placeholder="Add any special rules or context..."
                 className={styles.textarea}
                 rows={6}
                 value={instructions}
@@ -472,32 +496,6 @@ export default function Home() {
                 </div>
               </div>
 
-              <fieldset className={styles.fieldset}>
-                <legend className={styles.legend}>Retrieval mode</legend>
-                <label className={styles.radio}>
-                  <input
-                    type="radio"
-                    name="mode"
-                    value="static"
-                    checked={mode === "static"}
-                    onChange={() => setMode("static")}
-                    disabled={submitting}
-                  />
-                  Single-page HTTP fetch (default)
-                </label>
-                <label className={styles.radio}>
-                  <input
-                    type="radio"
-                    name="mode"
-                    value="browserless"
-                    checked={mode === "browserless"}
-                    onChange={() => setMode("browserless")}
-                    disabled={submitting}
-                  />
-                  Browserless (falls back to single page for now)
-                </label>
-              </fieldset>
-
               <button className={styles.submit} type="submit" disabled={submitting}>
                 {submitting ? "Generating…" : "Generate draft policy"}
               </button>
@@ -512,10 +510,6 @@ export default function Home() {
             {!hasResults && (
               <div className={styles.placeholder}>
                 <h2>Results will appear here</h2>
-                <p>
-                  Submit a URL to see the landing-page snapshot, suggested policies, and any existing
-                  <code>.well-known/agent-permissions.json</code> we find.
-                </p>
               </div>
             )}
 
@@ -551,8 +545,7 @@ export default function Home() {
         <div className={styles.splitPanel}>
           <section className={styles.panel}>
             <div className={styles.panelHeading}>
-              <h2>Paste any agent-permissions.json</h2>
-              <p className={styles.muted}>We will parse it and describe the rules in plain English.</p>
+              <h2>Parse any agent-permissions.json</h2>
             </div>
             <textarea
               className={styles.textarea}

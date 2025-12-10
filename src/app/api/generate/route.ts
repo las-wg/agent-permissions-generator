@@ -7,7 +7,6 @@ import { promises as fs } from "fs";
 interface GenerateRequest {
   url?: string;
   instructions?: string;
-  mode?: "static" | "browserless";
 }
 
 interface LlmResult {
@@ -170,13 +169,7 @@ async function buildResponse({
 }): Promise<GenerateResponseBody> {
   const instructions = payload.instructions?.slice(0, 2000) ?? "";
   const notes: string[] = [];
-  const effectiveMode = payload.mode === "browserless" ? "static" : "static";
-
-  if (payload.mode === "browserless") {
-    notes.push(
-      "Browserless mode is not yet available in this preview; fell back to static HTTP fetches.",
-    );
-  }
+  const effectiveMode = "static";
 
   const [robots, existingPolicy] = await Promise.all([
     (async () => {
