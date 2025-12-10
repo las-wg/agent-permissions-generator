@@ -69,7 +69,11 @@ export async function crawlSite(
       redirect: "follow",
     });
 
-    log.push({ url: normalizedUrl, status: response.status });
+    log.push({
+      url: normalizedUrl,
+      status: response.status,
+      reason: "Fetched landing page (single-page snapshot; links not followed)",
+    });
 
     if (!response.ok) {
       return { pages, log };

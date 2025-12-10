@@ -1,8 +1,10 @@
 .page {
   min-height: 100vh;
   width: 100%;
-  padding: 48px 16px 64px;
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.14), rgba(59, 130, 246, 0.04));
+  padding: 48px 16px 80px;
+  background: radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.14), transparent 45%),
+    radial-gradient(circle at 80% 0%, rgba(124, 58, 237, 0.16), transparent 42%),
+    linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.02));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -10,7 +12,7 @@
 }
 
 .header {
-  max-width: 920px;
+  max-width: 1000px;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -43,12 +45,43 @@
   font-size: 0.95rem;
 }
 
-.main {
+.tabRow {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 999px;
+  padding: 6px;
+  gap: 6px;
+  box-shadow: 0 18px 36px -16px rgba(59, 130, 246, 0.35);
+}
+
+.tabButton {
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  color: rgba(17, 24, 39, 0.7);
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.tabButtonActive {
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #fff;
+  box-shadow: 0 10px 18px rgba(79, 70, 229, 0.35);
+}
+
+.tabButton:hover {
+  transform: translateY(-1px);
+}
+
+.splitPanel {
   width: 100%;
   max-width: 1200px;
   display: grid;
-  grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
-  gap: 28px;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 24px;
 }
 
 .panel {
@@ -63,28 +96,10 @@
   box-shadow: 0 25px 50px -12px rgba(30, 64, 175, 0.18);
 }
 
-@media (prefers-color-scheme: dark) {
-  .page {
-    background: linear-gradient(180deg, rgba(56, 189, 248, 0.12), rgba(56, 189, 248, 0.04));
-  }
-
-  .subtitle {
-    color: rgba(248, 250, 252, 0.76);
-  }
-
-  .subtitle code {
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  .panel {
-    background: rgba(15, 23, 42, 0.82);
-    border: 1px solid rgba(148, 163, 184, 0.18);
-    box-shadow: 0 25px 60px -18px rgba(14, 165, 233, 0.35);
-  }
-
-  .eyebrow {
-    color: #38bdf8;
-  }
+.panelHeading {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .form {
@@ -241,7 +256,8 @@
   gap: 20px;
 }
 
-.card {
+.card,
+.timeline {
   border-radius: 16px;
   border: 1px solid rgba(15, 23, 42, 0.1);
   background: rgba(255, 255, 255, 0.72);
@@ -441,11 +457,162 @@
   transform: translateY(0);
 }
 
+.quickToggle {
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(59, 130, 246, 0.04);
+}
+
+.quickToggle input {
+  margin-top: 4px;
+}
+
+.quickToggleDisabled {
+  opacity: 0.6;
+}
+
+.quickToggleLabel {
+  font-weight: 700;
+}
+
+.quickToggleDescription {
+  color: rgba(17, 24, 39, 0.7);
+  font-size: 0.9rem;
+}
+
+.toggleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rateLimitBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pill {
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.86);
+  cursor: pointer;
+  font-weight: 600;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.pillActive {
+  background: rgba(59, 130, 246, 0.16);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: rgba(17, 24, 39, 0.9);
+}
+
+.timelineList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.timelineItem {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.timelineItem:last-of-type {
+  border-bottom: none;
+}
+
+.timelineMain {
+  font-weight: 600;
+}
+
+.timelineDetail {
+  grid-column: 1 / span 1;
+  color: rgba(17, 24, 39, 0.7);
+  font-size: 0.9rem;
+}
+
+.timelineTime {
+  grid-column: 2 / span 1;
+  justify-self: end;
+  color: rgba(17, 24, 39, 0.7);
+  font-size: 0.8rem;
+}
+
+.parserSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.parserSection h3 {
+  margin: 0;
+}
+
+.summaryList {
+  list-style: disc;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 @media (prefers-color-scheme: dark) {
+  .page {
+    background: radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.12), transparent 36%),
+      radial-gradient(circle at 80% 10%, rgba(168, 85, 247, 0.2), transparent 32%),
+      linear-gradient(180deg, rgba(56, 189, 248, 0.12), rgba(56, 189, 248, 0.04));
+  }
+
+  .subtitle {
+    color: rgba(248, 250, 252, 0.76);
+  }
+
+  .subtitle code {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .panel,
+  .card,
+  .timeline {
+    background: rgba(15, 23, 42, 0.82);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    box-shadow: 0 25px 60px -18px rgba(14, 165, 233, 0.35);
+  }
+
+  .eyebrow {
+    color: #38bdf8;
+  }
+
   .input,
   .textarea {
     background: rgba(15, 23, 42, 0.72);
     border-color: rgba(148, 163, 184, 0.18);
+    color: rgba(226, 232, 240, 0.92);
   }
 
   .presetLabel {
@@ -462,12 +629,8 @@
     background: rgba(234, 179, 8, 0.22);
   }
 
-  .card {
-    background: rgba(15, 23, 42, 0.78);
-    border-color: rgba(148, 163, 184, 0.16);
-  }
-
-  .code {
+  .code,
+  .pageCode {
     background: rgba(30, 41, 59, 0.76);
   }
 
@@ -486,10 +649,6 @@
 
   .pageMeta {
     color: rgba(191, 219, 254, 0.82);
-  }
-
-  .pageCode {
-    background: rgba(30, 41, 59, 0.76);
   }
 
   .tag {
@@ -513,13 +672,31 @@
     color: rgba(226, 232, 240, 0.9);
   }
 
-  .copyButton:hover {
+  .quickToggleDescription,
+  .timelineDetail,
+  .timelineTime {
+    color: rgba(203, 213, 225, 0.75);
+  }
+
+  .quickToggle {
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.35);
+  }
+
+  .pill {
+    background: rgba(30, 41, 59, 0.8);
+    border-color: rgba(148, 163, 184, 0.24);
+    color: rgba(226, 232, 240, 0.9);
+  }
+
+  .pillActive {
     background: rgba(59, 130, 246, 0.3);
+    border-color: rgba(59, 130, 246, 0.6);
   }
 }
 
 @media (max-width: 960px) {
-  .main {
+  .splitPanel {
     grid-template-columns: 1fr;
   }
 }
@@ -533,7 +710,14 @@
     padding: 22px;
   }
 
-  .card {
+  .card,
+  .timeline {
     padding: 14px 16px;
+  }
+
+  .tabRow {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
   }
 }

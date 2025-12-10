@@ -25,12 +25,6 @@ type ExistingPolicy = {
   raw?: string;
 } | null;
 
-type CrawlLogEntry = {
-  url: string;
-  status?: number;
-  reason?: string;
-};
-
 type CrawlSummary = {
   totalPages: number;
   pagesWithForms: number;
@@ -54,6 +48,12 @@ type CrawlPage = {
   containsLogin: boolean;
 };
 
+type ProcessLogEntry = {
+  step: string;
+  detail?: string;
+  elapsedMs: number;
+};
+
 type ApiResponse = {
   input: {
     url: string;
@@ -68,28 +68,113 @@ type ApiResponse = {
     policy: unknown | null;
     error?: string;
   };
+  processLog: ProcessLogEntry[];
   crawlSummary: CrawlSummary;
-  crawlLog: CrawlLogEntry[];
   crawlPages: CrawlPage[];
 };
 
+type QuickBuilderState = {
+  siteName: string;
+  allowReadContent: boolean;
+  allowReadMetadata: boolean;
+  allowNavigation: boolean;
+  allowForms: boolean;
+  requireHumanForForms: boolean;
+  blockLogin: boolean;
+  rateLimit: "gentle" | "standard" | "open";
+  allowDownloads: boolean;
+};
+
+type ParsedPolicy = {
+  error?: string;
+  metadata?: {
+    schema_version?: string;
+    last_updated?: string;
+    author?: string;
+  };
+  resourceRules: Array<{
+    verb: string;
+    selector: string;
+    allowed: boolean;
+    modifiers?: {
+      burst?: number;
+      rate_limit?: { max_requests?: number; window_seconds?: number };
+      time_window?: string;
+      human_in_the_loop?: boolean;
+    };
+  }>;
+  actionGuidelines: Array<{
+    directive: string;
+    description: string;
+    exceptions?: string;
+  }>;
+};
+
+type TabKey = "quick" | "generator" | "parser";
+
 const DEFAULT_MODE: "static" | "browserless" = "static";
+const DEFAULT_QUICK_STATE: QuickBuilderState = {
+  siteName: "",
+  allowReadContent: true,
+  allowReadMetadata: true,
+  allowNavigation: true,
+  allowForms: true,
+  requireHumanForForms: false,
+  blockLogin: false,
+  rateLimit: "open",
+  allowDownloads: true,
+};
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState<TabKey>("quick");
   const [url, setUrl] = useState("");
   const [instructions, setInstructions] = useState("");
   const [mode, setMode] = useState<"static" | "browserless">(DEFAULT_MODE);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ApiResponse | null>(null);
+  const [processLog, setProcessLog] = useState<ProcessLogEntry[]>([]);
+  const [quickState, setQuickState] = useState<QuickBuilderState>(DEFAULT_QUICK_STATE);
+  const [parserInput, setParserInput] = useState<string>(`{
+  "metadata": {
+    "schema_version": "1.0.0",
+    "last_updated": "2025-01-01T00:00:00Z",
+    "author": "Example Corp"
+  },
+  "resource_rules": [
+    {
+      "verb": "read_content",
+      "selector": "*",
+      "allowed": true
+    },
+    {
+      "verb": "follow_link",
+      "selector": "nav a, main a",
+      "allowed": true
+    }
+  ],
+  "action_guidelines": [
+    {
+      "directive": "MUST NOT",
+      "description": "Submit credentials or attempt to log in."
+    }
+  ]
+}`);
+
+  const quickPolicy = useMemo(() => buildQuickPolicy(quickState), [quickState]);
+  const parsedPolicy = useMemo(() => parsePolicy(parserInput), [parserInput]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
+    setResult(null);
+    setProcessLog([{ step: "Submitting request", detail: url, elapsedMs: 0 }]);
+
+    const started = Date.now();
 
     try {
-      const response = await fetch("/api/generate", {
+      const response = await fetch("/api/generate?stream=1", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -99,17 +184,71 @@ export default function Home() {
         }),
       });
 
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as {
-          error?: string;
-        } | null;
+      if (!response.ok || !response.body) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
         throw new Error(payload?.error ?? "Request failed.");
       }
 
-      const payload = (await response.json()) as ApiResponse;
-      setResult(payload);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      const flushChunk = (chunk: string) => {
+        const parts = chunk.split("\n").filter(Boolean);
+        if (!parts.length) return;
+        const eventLine = parts.find((line) => line.startsWith("event:"));
+        const dataLine = parts.find((line) => line.startsWith("data:"));
+        const eventType = eventLine ? eventLine.replace("event:", "").trim() : "message";
+        const dataRaw = dataLine ? dataLine.replace("data:", "").trim() : "";
+
+        let parsed: unknown = null;
+        if (dataRaw) {
+          try {
+            parsed = JSON.parse(dataRaw);
+          } catch {
+            parsed = null;
+          }
+        }
+
+        if (eventType === "log" && parsed && typeof parsed === "object") {
+          setProcessLog((prev) => [...prev, parsed as ProcessLogEntry]);
+        } else if (eventType === "result" && parsed) {
+          const payload = parsed as ApiResponse;
+          setResult(payload);
+          setProcessLog(payload.processLog ?? []);
+        } else if (eventType === "error") {
+          const message = (parsed as { message?: string } | null)?.message ?? "Request failed.";
+          throw new Error(message);
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          if (buffer.trim()) {
+            flushChunk(buffer);
+          }
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        let boundary = buffer.indexOf("\n\n");
+        while (boundary !== -1) {
+          const chunk = buffer.slice(0, boundary);
+          flushChunk(chunk);
+          buffer = buffer.slice(boundary + 2);
+          boundary = buffer.indexOf("\n\n");
+        }
+      }
     } catch (err) {
       setResult(null);
+      setProcessLog((prev) => [
+        ...prev,
+        {
+          step: "Request failed",
+          detail: err instanceof Error ? err.message : "Unknown error",
+          elapsedMs: Date.now() - started,
+        },
+      ]);
       setError(err instanceof Error ? err.message : "Unknown error.");
     } finally {
       setSubmitting(false);
@@ -127,147 +266,356 @@ export default function Home() {
   };
 
   const hasResults = Boolean(result);
+  const activeTimeline = result?.processLog?.length ? result.processLog : processLog;
 
   return (
     <div className={styles.page}>
       <header className={styles.header}>
         <p className={styles.eyebrow}>Agent Permissions Playground</p>
-        <h1 className={styles.title}>Draft policies for your site in minutes</h1>
+        <h1 className={styles.title}>Draft, test, and explain agent-permissions.json</h1>
         <p className={styles.subtitle}>
-          Crawl a few pages, inspect what the bot saw, and get a starter{" "}
-          <code>agent-permissions.json</code> you can tweak before publishing.
+          Capture a single-page snapshot (no crawling), generate a draft policy, build one from
+          presets, or paste JSON to see a human-friendly explainer.
         </p>
       </header>
 
-      <main className={styles.main}>
-        <section className={styles.panel}>
-          <form className={styles.form} onSubmit={handleSubmit}>
-            <label className={styles.label} htmlFor="site-url">
-              Website URL
-            </label>
-            <input
-              id="site-url"
-              name="url"
-              type="url"
-              placeholder="https://example.com"
-              required
-              className={styles.input}
-              value={url}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                setUrl(event.currentTarget.value)
-              }
-            />
+      <div className={styles.tabRow}>
+        <TabButton
+          label="Quick builder"
+          active={activeTab === "quick"}
+          onClick={() => setActiveTab("quick")}
+        />
+        <TabButton
+          label="Generator"
+          active={activeTab === "generator"}
+          onClick={() => setActiveTab("generator")}
+        />
+        <TabButton
+          label="Parser / explainer"
+          active={activeTab === "parser"}
+          onClick={() => setActiveTab("parser")}
+        />
+      </div>
 
-            <label className={styles.label} htmlFor="instructions">
-              Instructions for the agent
-            </label>
-            <textarea
-              id="instructions"
-              name="instructions"
-              placeholder="Share any special rules or context..."
-              className={styles.textarea}
-              rows={6}
-              value={instructions}
-              onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-                setInstructions(event.currentTarget.value)
-              }
-            />
-
-            <div className={styles.presets}>
-              <p className={styles.presetLabel}>Quick additions</p>
-              <div className={styles.presetButtons}>
-                {PRESET_SNIPPETS.map((preset) => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    className={styles.preset}
-                    onClick={() => handlePreset(preset.text)}
-                    disabled={submitting}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <fieldset className={styles.fieldset}>
-              <legend className={styles.legend}>Crawler mode</legend>
-              <label className={styles.radio}>
-                <input
-                  type="radio"
-                  name="mode"
-                  value="static"
-                  checked={mode === "static"}
-                  onChange={() => setMode("static")}
-                  disabled={submitting}
-                />
-                Static HTTP fetch (default)
-              </label>
-              <label className={styles.radio}>
-                <input
-                  type="radio"
-                  name="mode"
-                  value="browserless"
-                  checked={mode === "browserless"}
-                  onChange={() => setMode("browserless")}
-                  disabled={submitting}
-                />
-                Headless browser (experimental fallback)
-              </label>
-            </fieldset>
-
-            <button
-              className={styles.submit}
-              type="submit"
-              disabled={submitting}
-            >
-              {submitting ? "Generating…" : "Generate draft policy"}
-            </button>
-
-            {error && <p className={styles.error}>{error}</p>}
-          </form>
-        </section>
-
-        <section className={styles.panel}>
-          {!hasResults && (
-            <div className={styles.placeholder}>
-              <h2>Results will appear here</h2>
-              <p>
-                Submit a URL to see crawl highlights, suggested policies, and
-                any existing <code>.well-known</code> file we discover.
+      {activeTab === "quick" && (
+        <div className={styles.splitPanel}>
+          <section className={styles.panel}>
+            <div className={styles.panelHeading}>
+              <h2>Quick agent-permissions builder</h2>
+              <p className={styles.muted}>
+                Pick a few opinionated defaults, then copy a ready-to-ship agent-permissions.json.
               </p>
             </div>
-          )}
 
-          {result && (
-            <div className={styles.resultsStack}>
-              <StatusChips summary={result.crawlSummary} notes={result.notes} />
-              {result.llm.error && (
-                <div className={styles.alert}>
-                  <strong>Model warning:</strong> {result.llm.error}
-                </div>
-              )}
-              <JsonCard title="Generated policy" data={result.llm.policy} />
-              <JsonCard
-                title={`Raw response (${result.llm.model})`}
-                data={result.llm.raw}
-                emptyMessage="No response from the model."
+            <label className={styles.label} htmlFor="site-name">
+              Site or org name (optional)
+            </label>
+            <input
+              id="site-name"
+              name="site-name"
+              className={styles.input}
+              placeholder="Acme Inc"
+              value={quickState.siteName}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                setQuickState((prev) => ({ ...prev, siteName: event.currentTarget.value }))
+              }
+            />
+
+            <div className={styles.toggleGroup}>
+              <QuickToggle
+                label="Allow reading page content"
+                description="Let agents read visible text on the captured page."
+                checked={quickState.allowReadContent}
+                onChange={(value) => setQuickState((prev) => ({ ...prev, allowReadContent: value }))}
               />
-
-              <JsonCard
-                title="Existing policy on site"
-                data={result.existingPolicy?.body ?? result.existingPolicy?.raw ?? null}
-                emptyMessage="No existing agent-permissions.json was found."
+              <QuickToggle
+                label="Allow reading metadata"
+                description="Permit reading titles, meta tags, and structured data."
+                checked={quickState.allowReadMetadata}
+                onChange={(value) =>
+                  setQuickState((prev) => ({ ...prev, allowReadMetadata: value }))
+                }
               />
-
-              <CrawlPagesCard pages={result.crawlPages} />
-
-              <CrawlLog log={result.crawlLog} />
             </div>
-          )}
-        </section>
-      </main>
+
+            <QuickToggle
+              label="Allow navigation between links"
+              description="Let agents follow standard navigation links inside the page context."
+              checked={quickState.allowNavigation}
+              onChange={(value) => setQuickState((prev) => ({ ...prev, allowNavigation: value }))}
+            />
+
+            <div className={styles.toggleGroup}>
+              <QuickToggle
+                label="Allow form filling & submission"
+                description="Permit inputs and form submits on the captured page."
+                checked={quickState.allowForms}
+                onChange={(value) => setQuickState((prev) => ({ ...prev, allowForms: value }))}
+              />
+              <QuickToggle
+                label="Require human confirmation for forms"
+                description="Keep forms human-in-the-loop to avoid accidental submissions."
+                checked={quickState.requireHumanForForms}
+                onChange={(value) =>
+                  setQuickState((prev) => ({ ...prev, requireHumanForForms: value }))
+                }
+                disabled={!quickState.allowForms}
+              />
+            </div>
+
+            <QuickToggle
+              label="Block login or credential flows"
+              description="Adds a MUST NOT guideline that forbids authentication attempts."
+              checked={quickState.blockLogin}
+              onChange={(value) => setQuickState((prev) => ({ ...prev, blockLogin: value }))}
+            />
+
+            <QuickToggle
+              label="Allow file downloads"
+              description="If disabled, downloads stay blocked by default."
+              checked={quickState.allowDownloads}
+              onChange={(value) => setQuickState((prev) => ({ ...prev, allowDownloads: value }))}
+            />
+
+            <div className={styles.rateLimitBlock}>
+              <p className={styles.label}>Navigation throttle</p>
+              <div className={styles.pillRow}>
+                <button
+                  type="button"
+                  className={`${styles.pill} ${quickState.rateLimit === "gentle" ? styles.pillActive : ""}`}
+                  onClick={() => setQuickState((prev) => ({ ...prev, rateLimit: "gentle" }))}
+                >
+                  Gentle (1 req/sec)
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.pill} ${quickState.rateLimit === "standard" ? styles.pillActive : ""}`}
+                  onClick={() => setQuickState((prev) => ({ ...prev, rateLimit: "standard" }))}
+                >
+                  Standard (5 req / 10s)
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.pill} ${quickState.rateLimit === "open" ? styles.pillActive : ""}`}
+                  onClick={() => setQuickState((prev) => ({ ...prev, rateLimit: "open" }))}
+                >
+                  No throttle
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className={styles.panel}>
+            <div className={styles.cardHeader}>
+              <h2>agent-permissions.json preview</h2>
+              <CopyButton text={quickPolicy} />
+            </div>
+            <pre className={styles.code}>{quickPolicy}</pre>
+          </section>
+        </div>
+      )}
+
+      {activeTab === "generator" && (
+        <div className={styles.splitPanel}>
+          <section className={styles.panel}>
+            <form className={styles.form} onSubmit={handleSubmit}>
+              <div className={styles.panelHeading}>
+                <h2>Generator</h2>
+                <p className={styles.muted}>
+                  We only fetch the landing page you provide. No crawling across links.
+                </p>
+              </div>
+
+              <label className={styles.label} htmlFor="site-url">
+                Website URL
+              </label>
+              <input
+                id="site-url"
+                name="url"
+                type="url"
+                placeholder="https://example.com"
+                required
+                className={styles.input}
+                value={url}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setUrl(event.currentTarget.value)}
+              />
+
+              <label className={styles.label} htmlFor="instructions">
+                Instructions for the agent
+              </label>
+              <textarea
+                id="instructions"
+                name="instructions"
+                placeholder="Share any special rules or context..."
+                className={styles.textarea}
+                rows={6}
+                value={instructions}
+                onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
+                  setInstructions(event.currentTarget.value)
+                }
+              />
+
+              <div className={styles.presets}>
+                <p className={styles.presetLabel}>Quick additions</p>
+                <div className={styles.presetButtons}>
+                  {PRESET_SNIPPETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      className={styles.preset}
+                      onClick={() => handlePreset(preset.text)}
+                      disabled={submitting}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <fieldset className={styles.fieldset}>
+                <legend className={styles.legend}>Retrieval mode</legend>
+                <label className={styles.radio}>
+                  <input
+                    type="radio"
+                    name="mode"
+                    value="static"
+                    checked={mode === "static"}
+                    onChange={() => setMode("static")}
+                    disabled={submitting}
+                  />
+                  Single-page HTTP fetch (default)
+                </label>
+                <label className={styles.radio}>
+                  <input
+                    type="radio"
+                    name="mode"
+                    value="browserless"
+                    checked={mode === "browserless"}
+                    onChange={() => setMode("browserless")}
+                    disabled={submitting}
+                  />
+                  Browserless (falls back to single page for now)
+                </label>
+              </fieldset>
+
+              <button className={styles.submit} type="submit" disabled={submitting}>
+                {submitting ? "Generating…" : "Generate draft policy"}
+              </button>
+
+              {error && <p className={styles.error}>{error}</p>}
+            </form>
+          </section>
+
+          <section className={styles.panel}>
+            {activeTimeline.length > 0 && <ProcessTimeline log={activeTimeline} loading={submitting} />}
+
+            {!hasResults && (
+              <div className={styles.placeholder}>
+                <h2>Results will appear here</h2>
+                <p>
+                  Submit a URL to see the landing-page snapshot, suggested policies, and any existing
+                  <code>.well-known/agent-permissions.json</code> we find.
+                </p>
+              </div>
+            )}
+
+            {result && (
+              <div className={styles.resultsStack}>
+                <StatusChips summary={result.crawlSummary} notes={result.notes} />
+                {result.llm.error && (
+                  <div className={styles.alert}>
+                    <strong>Model warning:</strong> {result.llm.error}
+                  </div>
+                )}
+                <JsonCard title="Generated policy" data={result.llm.policy} />
+                <JsonCard
+                  title={`Raw response (${result.llm.model})`}
+                  data={result.llm.raw}
+                  emptyMessage="No response from the model."
+                />
+
+                <JsonCard
+                  title="Existing policy on site"
+                  data={result.existingPolicy?.body ?? result.existingPolicy?.raw ?? null}
+                  emptyMessage="No existing agent-permissions.json was found."
+                />
+
+                <CrawlPagesCard pages={result.crawlPages} />
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+
+      {activeTab === "parser" && (
+        <div className={styles.splitPanel}>
+          <section className={styles.panel}>
+            <div className={styles.panelHeading}>
+              <h2>Paste any agent-permissions.json</h2>
+              <p className={styles.muted}>We will parse it and describe the rules in plain English.</p>
+            </div>
+            <textarea
+              className={styles.textarea}
+              rows={18}
+              value={parserInput}
+              onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setParserInput(event.currentTarget.value)}
+            />
+          </section>
+          <section className={styles.panel}>
+            <ParserSummary parsed={parsedPolicy} />
+          </section>
+        </div>
+      )}
     </div>
+  );
+}
+
+function TabButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`${styles.tabButton} ${active ? styles.tabButtonActive : ""}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function QuickToggle({
+  label,
+  description,
+  checked,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label className={`${styles.quickToggle} ${disabled ? styles.quickToggleDisabled : ""}`}>
+      <div>
+        <div className={styles.quickToggleLabel}>{label}</div>
+        <div className={styles.quickToggleDescription}>{description}</div>
+      </div>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.currentTarget.checked)}
+        disabled={disabled}
+      />
+    </label>
   );
 }
 
@@ -313,7 +661,7 @@ function StatusChips({
   return (
     <div className={styles.statusRow}>
       <span className={styles.tag}>
-        {summary.totalPages} page{summary.totalPages === 1 ? "" : "s"} crawled
+        {summary.totalPages} page snapshot
       </span>
       {summary.pagesWithForms > 0 && (
         <span className={styles.tag}>
@@ -341,41 +689,14 @@ function StatusChips({
   );
 }
 
-function CrawlLog({ log }: { log: CrawlLogEntry[] }) {
-  if (!log.length) {
-    return null;
-  }
-
-  return (
-    <div className={styles.card}>
-      <div className={styles.cardHeader}>
-        <h2>Crawl log</h2>
-      </div>
-      <ul className={styles.logList}>
-        {log.map((entry) => (
-          <li key={entry.url} className={styles.logItem}>
-            <span className={styles.logUrl}>{entry.url}</span>
-            {typeof entry.status === "number" ? (
-              <span className={styles.statusBadge}>{entry.status}</span>
-            ) : null}
-            {entry.reason ? (
-              <span className={styles.logReason}>{entry.reason}</span>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function CrawlPagesCard({ pages }: { pages: CrawlPage[] }) {
   if (!pages.length) {
     return (
       <div className={styles.card}>
         <div className={styles.cardHeader}>
-          <h2>Pages crawled</h2>
+          <h2>Page snapshot</h2>
         </div>
-        <p className={styles.muted}>The crawler could not fetch any content.</p>
+        <p className={styles.muted}>The fetcher could not retrieve the landing page content.</p>
       </div>
     );
   }
@@ -383,7 +704,7 @@ function CrawlPagesCard({ pages }: { pages: CrawlPage[] }) {
   return (
     <div className={styles.card}>
       <div className={styles.cardHeader}>
-        <h2>Pages crawled</h2>
+        <h2>Page snapshot</h2>
       </div>
       <div className={styles.pageList}>
         {pages.map((page) => (
@@ -437,12 +758,292 @@ function CopyButton({ text }: { text: string }) {
   };
 
   return (
-    <button
-      type="button"
-      className={styles.copyButton}
-      onClick={handleClick}
-    >
+    <button type="button" className={styles.copyButton} onClick={handleClick}>
       {copied ? "Copied!" : "Copy"}
     </button>
   );
+}
+
+function ProcessTimeline({ log, loading }: { log: ProcessLogEntry[]; loading?: boolean }) {
+  if (!log.length) return null;
+
+  return (
+    <div className={styles.timeline}>
+      <div className={styles.cardHeader}>
+        <h2>Run log</h2>
+        {loading && <span className={styles.tag}>Running…</span>}
+      </div>
+      <ul className={styles.timelineList}>
+        {log.map((entry, index) => (
+          <li key={`${entry.step}-${index}`} className={styles.timelineItem}>
+            <div className={styles.timelineMain}>{entry.step}</div>
+            {entry.detail && <div className={styles.timelineDetail}>{entry.detail}</div>}
+            <span className={styles.timelineTime}>{formatMs(entry.elapsedMs)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ParserSummary({ parsed }: { parsed: ParsedPolicy }) {
+  if (parsed.error) {
+    return (
+      <div className={styles.card}>
+        <div className={styles.cardHeader}>
+          <h2>Explanation</h2>
+        </div>
+        <p className={styles.error}>Could not parse JSON: {parsed.error}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardHeader}>
+        <h2>Explanation</h2>
+      </div>
+      {parsed.metadata ? (
+        <div className={styles.metaRow}>
+          <span className={styles.tag}>Schema {parsed.metadata.schema_version ?? "?"}</span>
+          {parsed.metadata.last_updated && (
+            <span className={styles.tagNote}>
+              Updated {formatDate(parsed.metadata.last_updated)}
+            </span>
+          )}
+          {parsed.metadata.author && <span className={styles.tagNote}>Author {parsed.metadata.author}</span>}
+        </div>
+      ) : (
+        <p className={styles.muted}>No metadata found.</p>
+      )}
+
+      <div className={styles.parserSection}>
+        <h3>Resource rules</h3>
+        {parsed.resourceRules.length === 0 && <p className={styles.muted}>None present.</p>}
+        <ul className={styles.summaryList}>
+          {parsed.resourceRules.map((rule, index) => (
+            <li key={`${rule.verb}-${rule.selector}-${index}`}>
+              <strong>{formatVerb(rule.verb)}</strong> on <code>{rule.selector}</code> →{" "}
+              {rule.allowed ? "allowed" : "blocked"}
+              {rule.modifiers?.rate_limit
+                ? ` · rate limit ${rule.modifiers.rate_limit.max_requests ?? "?"}/${rule.modifiers.rate_limit.window_seconds ?? "?"}s`
+                : ""}
+              {rule.modifiers?.human_in_the_loop ? " · human confirmation" : ""}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className={styles.parserSection}>
+        <h3>Action guidelines</h3>
+        {parsed.actionGuidelines.length === 0 && <p className={styles.muted}>None present.</p>}
+        <ul className={styles.summaryList}>
+          {parsed.actionGuidelines.map((item, index) => (
+            <li key={`${item.directive}-${index}`}>
+              <strong>{item.directive}</strong>: {item.description}
+              {item.exceptions ? ` (Except: ${item.exceptions})` : ""}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function buildQuickPolicy(state: QuickBuilderState): string {
+  const now = new Date().toISOString();
+  const rules = [
+    { verb: "read_content", selector: "*", allowed: state.allowReadContent },
+    { verb: "read_metadata", selector: "*", allowed: state.allowReadMetadata },
+    {
+      verb: "follow_link",
+      selector: "*",
+      allowed: state.allowNavigation,
+      modifiers: state.allowNavigation ? buildRateLimit(state.rateLimit) : undefined,
+    },
+    {
+      verb: "set_input_value",
+      selector: "form input, form textarea, form select, form option, form button",
+      allowed: state.allowForms,
+      modifiers: state.allowForms && state.requireHumanForForms ? { human_in_the_loop: true } : undefined,
+    },
+    {
+      verb: "submit_form",
+      selector: "form",
+      allowed: state.allowForms,
+      modifiers: state.allowForms && state.requireHumanForForms ? { human_in_the_loop: true } : undefined,
+    },
+    { verb: "execute_script", selector: "*", allowed: false },
+    { verb: "upload_file", selector: "input[type='file']", allowed: false },
+    {
+      verb: "download_file",
+      selector: state.allowDownloads ? "*" : "a[download], [role='button']",
+      allowed: state.allowDownloads,
+    },
+  ];
+
+  const guidelines = [
+    state.blockLogin
+      ? {
+          directive: "MUST NOT",
+          description: "Attempt to log in or submit credentials, MFA codes, or session tokens.",
+        }
+      : null,
+    state.allowForms
+      ? {
+          directive: state.requireHumanForForms ? "SHOULD" : "SHOULD",
+          description: state.requireHumanForForms
+            ? "Confirm with a human before submitting forms or irreversible actions."
+            : "Keep form submissions minimal and avoid sensitive personal data.",
+        }
+      : null,
+    state.rateLimit === "gentle"
+      ? {
+          directive: "SHOULD",
+          description: "Throttle navigation to roughly one request per second.",
+        }
+      : null,
+    state.rateLimit === "standard"
+      ? {
+          directive: "SHOULD",
+          description: "Stay within ~5 requests every 10 seconds to reduce load.",
+        }
+      : null,
+  ].filter(Boolean) as ParsedPolicy["actionGuidelines"];
+
+  const policy = {
+    metadata: {
+      schema_version: "1.0.0",
+      last_updated: now,
+      ...(state.siteName.trim() ? { author: state.siteName.trim() } : {}),
+    },
+    resource_rules: rules.map((rule) => {
+      const cleaned = { ...rule } as typeof rule & { modifiers?: typeof rule["modifiers"] };
+      if (!cleaned.modifiers) delete cleaned.modifiers;
+      return cleaned;
+    }),
+    action_guidelines: guidelines,
+  };
+
+  return JSON.stringify(policy, null, 2);
+}
+
+function buildRateLimit(rateLimit: QuickBuilderState["rateLimit"]) {
+  if (rateLimit === "open") return undefined;
+  if (rateLimit === "standard") {
+    return {
+      rate_limit: {
+        max_requests: 5,
+        window_seconds: 10,
+      },
+    };
+  }
+
+  return {
+    rate_limit: {
+      max_requests: 1,
+      window_seconds: 1,
+    },
+  };
+}
+
+function parsePolicy(raw: string): ParsedPolicy {
+  if (!raw.trim()) {
+    return { resourceRules: [], actionGuidelines: [] };
+  }
+
+  try {
+    const data = JSON.parse(raw);
+    const metadata = typeof data.metadata === "object" && data.metadata ? data.metadata : undefined;
+
+    const resourceRuleCandidates = Array.isArray(data.resource_rules) ? (data.resource_rules as unknown[]) : [];
+    const resourceRules = resourceRuleCandidates
+      .filter(
+        (rule): rule is { verb: string; selector: string; allowed: boolean; modifiers?: ParsedPolicy["resourceRules"][number]["modifiers"] } =>
+          Boolean(
+            rule &&
+              typeof (rule as { verb?: unknown }).verb === "string" &&
+              typeof (rule as { selector?: unknown }).selector === "string" &&
+              typeof (rule as { allowed?: unknown }).allowed === "boolean",
+          ),
+      )
+      .map((rule) => ({
+        verb: rule.verb,
+        selector: rule.selector,
+        allowed: rule.allowed,
+        modifiers: rule.modifiers,
+      }));
+
+    const actionGuidelineCandidates = Array.isArray(data.action_guidelines)
+      ? (data.action_guidelines as unknown[])
+      : [];
+    const actionGuidelines = actionGuidelineCandidates
+      .filter(
+        (item): item is { directive: string; description: string; exceptions?: string } =>
+          Boolean(
+            item &&
+              typeof (item as { directive?: unknown }).directive === "string" &&
+              typeof (item as { description?: unknown }).description === "string",
+          ),
+      )
+      .map((item) => ({
+        directive: item.directive,
+        description: item.description,
+        exceptions: item.exceptions,
+      }));
+
+    return {
+      metadata,
+      resourceRules,
+      actionGuidelines,
+    };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "Unable to parse JSON.",
+      resourceRules: [],
+      actionGuidelines: [],
+    };
+  }
+}
+
+function formatVerb(verb: string) {
+  const labels: Record<string, string> = {
+    all: "All actions",
+    read_content: "Read content",
+    read_metadata: "Read metadata",
+    follow_link: "Follow links",
+    click_element: "Click elements",
+    scroll_page: "Scroll page",
+    set_input_value: "Fill inputs",
+    submit_form: "Submit forms",
+    execute_script: "Execute script",
+    play_media: "Play media",
+    pause_media: "Pause media",
+    mute_media: "Mute media",
+    unmute_media: "Unmute media",
+    upload_file: "Upload files",
+    download_file: "Download files",
+    copy_to_clipboard: "Copy to clipboard",
+  };
+
+  if (labels[verb]) return labels[verb];
+  const spaced = verb.replace(/_/g, " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function formatDate(raw: string) {
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function formatMs(ms: number) {
+  if (ms < 1000) return `${ms} ms`;
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)} s`;
+  return `${Math.round(seconds / 60)} min`;
 }
